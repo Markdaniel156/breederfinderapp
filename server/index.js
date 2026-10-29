@@ -23,6 +23,7 @@ function authHeader() {
   return `Basic ${token}`;
 }
 
+app.get('/', (req, res) => res.json({ name: 'BreederFinder Payments Server', status: 'running' }));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Create a payment link for a given user/subscription
