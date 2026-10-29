@@ -1,0 +1,3 @@
+- [x] Create `faq_detail_screen.dart`
+- [x] Update `help_center_screen.dart` with more FAQs and navigation logic
+- [x] Verify navigation and UI

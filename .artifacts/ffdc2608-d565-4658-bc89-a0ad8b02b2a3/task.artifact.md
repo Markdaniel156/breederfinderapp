@@ -1,0 +1,5 @@
+- [x] Convert `PromoBanner` to `StatefulWidget`
+- [x] Implement `PageController` and `Timer` in `PromoBanner`
+- [x] Add auto-scroll logic with loop-back
+- [x] Ensure manual swiping works with auto-scroll
+- [x] Verify functionality

@@ -1,0 +1,4 @@
+- `[x]` Update `lib/widgets/home/home_header.dart`: relocation of map icon and new greeting format
+- `[x]` Update `lib/screens/home_screen.dart`: optimize category grid spacing
+- `[x]` Update `lib/widgets/home/listing_item.dart`: refine card visuals
+- `[x]` Final verification and cleanup

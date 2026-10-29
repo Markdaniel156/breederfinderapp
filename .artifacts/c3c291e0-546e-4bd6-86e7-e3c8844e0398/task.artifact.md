@@ -1,0 +1,4 @@
+- [x] Update radius to 200m in `geofencing_service.dart`
+- [x] Update radius to 200m in `map_screen.dart`
+- [x] Add "Cancel Arrival" button logic in `map_screen.dart`
+- [x] Verify arrival zone and cancel button functionality

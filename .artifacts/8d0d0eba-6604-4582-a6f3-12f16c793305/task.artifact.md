@@ -1,0 +1,6 @@
+- `[x]` Change `_markerIcons` cache to use User IDs as keys in `MapScreen`
+- `[x]` Add `_markerImageUrls` map to track and refresh icons when profile photos change
+- `[x]` Refactor `_loadMarkerIcons` to use unique breeders by User ID
+- `[x]` Update marker lookup in `build` to use User ID
+- `[x]` Ensure current user marker uses consistent high-quality generation
+- `[x]` Verify marker consistency across accounts

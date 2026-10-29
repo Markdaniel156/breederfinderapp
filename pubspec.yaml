@@ -1,0 +1,46 @@
+name: breederfinderapp
+description: "Breeder Finder and Trading Management App with Geofencing"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_maps_flutter: ^2.5.3
+  geolocator: ^10.1.0
+  flutter_local_notifications: ^17.2.1
+  provider: ^6.1.1
+  intl: ^0.19.0
+  image_picker: ^1.0.7
+  supabase_flutter: ^2.6.0
+  shared_preferences: ^2.2.2
+  google_mlkit_face_detection: ^0.11.0
+  connectivity_plus: ^7.1.1
+  firebase_core: ^3.1.1
+  firebase_messaging: ^15.0.3
+  http: ^1.1.0
+  url_launcher: ^6.2.0
+  webview_flutter: ^4.4.2
+  app_links: ^6.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo/app_logo.png"
+  min_sdk_android: 21 # flutter_launcher_icons requires this to be specified if it's not default
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo/

@@ -1,0 +1,6 @@
+- `[x]` Optimize ListingItem with memory cache dimensions and RepaintBoundary
+- `[x]` Optimize HomeScreen with scroll cache extent and image caching
+- `[x]` Optimize MarketScreen with scroll cache extent and image caching
+- `[x]` Optimize ProfileScreen with scroll cache extent and image caching
+- `[x]` Optimize MapScreen with image caching and smooth list scrolling
+- `[/]` Verify build and test scrolling performance

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "156562761997",
+    "project_id": "breederfinderapp",
+    "storage_bucket": "breederfinderapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:156562761997:android:49315a46eed0d72b052844",
+        "android_client_info": {
+          "package_name": "com.example.breederfinderapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC54syBCfokAjPP9_thxB2OoPNPqLM8nPo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

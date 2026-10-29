@@ -1,0 +1,8 @@
+- [x] Fix profile navigation in `home_screen.dart`
+    - [x] Make profile section clickable in `_buildListingItem`
+    - [x] Update `_buildProfileRow` to be clickable and navigate to profile
+    - [x] Update `_showTraderDetails` and `_showAnimalImages` to pass `userId` to `_buildProfileRow`
+    - [x] Make reviewer profiles clickable in `_buildReviewItem`
+- [x] Fix profile navigation in `favorites_screen.dart`
+- [x] Fix profile navigation in `chat_screen.dart` header
+- [x] Verify changes

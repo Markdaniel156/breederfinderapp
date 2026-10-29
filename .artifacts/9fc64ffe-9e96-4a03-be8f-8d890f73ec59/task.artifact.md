@@ -1,0 +1,10 @@
+- [x] Update `CategoryTile` in `category_tile.dart`
+- [x] Update `_buildCategoriesSection` in `home_screen.dart`
+- [x] Refine `CategoryTile` for Aesthetic Square Look
+- [x] Update `home_screen.dart` Grid
+- [x] Implement Animal Head Emojis & Smaller Grid
+- [x] Final Spacing Refinement
+- [x] Optimize Vertical Space Under Pictures
+    - [x] Tighten `CategoryTile` (SizedBox 8 -> 2)
+    - [x] Tighten `ListingItem` (SizedBoxes and Padding)
+- [x] Verify changes

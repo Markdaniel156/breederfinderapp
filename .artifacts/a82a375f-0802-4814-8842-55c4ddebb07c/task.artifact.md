@@ -1,0 +1,3 @@
+- [x] Remove white shadow/background from Home Screen header icons
+- [x] Fix status bar visibility in Feedback Screen
+- [x] Verify changes

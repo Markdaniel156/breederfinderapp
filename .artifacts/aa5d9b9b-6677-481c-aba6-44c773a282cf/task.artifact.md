@@ -1,0 +1,7 @@
+- `[x]` Update `home_screen.dart` to match Feed spacing and grid layout
+    - `[x]` Adjust `_buildCategoriesSection` header padding
+    - `[x]` Change Categories grid to 2 columns for a more "formal" post-like feel
+- `[x]` Redesign `category_tile.dart`
+    - `[x]` Move Category Name and Count above the Image
+    - `[x]` Apply "post" styling (card background, shadows, borders) to match `ListingItem`
+- `[x]` Verify the new layout and aesthetics

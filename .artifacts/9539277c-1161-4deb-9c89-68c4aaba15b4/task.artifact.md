@@ -1,0 +1,6 @@
+- [x] Update `ProfileScreen` to accept an optional `userId`
+- [x] Refactor `ProfileScreen` logic to fetch data for the target user
+- [x] Adaptive UI in `ProfileScreen` (hide/show elements based on current user)
+- [x] Add "Message" functionality to the adaptive profile
+- [x] Update `HomeScreen` listing items to show user avatar and handle profile redirection
+- [x] Verify all navigation flows
