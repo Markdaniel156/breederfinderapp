@@ -109,6 +109,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'avatar_url': avatarUrl,
       }).eq('id', user.id);
 
+      // Also update breeder_postings and trader_postings so post cards and map reflect the new profile picture & name instantly
+      try {
+        await supabase.from('breeder_postings').update({
+          'full_name': newName,
+          'avatar_url': avatarUrl,
+        }).eq('user_id', user.id);
+      } catch (_) {}
+
+      try {
+        await supabase.from('trader_postings').update({
+          'full_name': newName,
+          'avatar_url': avatarUrl,
+        }).eq('user_id', user.id);
+      } catch (_) {}
+
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(

@@ -195,23 +195,25 @@ Supabase.instance.client.auth.currentSession;
 
 if (session != null) {
 try {
-final userData = await Supabase.instance.client
-    .from('create_account')
-    .select('verification_status, role')
-    .eq('id', session.user.id)
-    .maybeSingle();
+    final userData = await Supabase.instance.client
+        .from('create_account')
+        .select('verification_status, role, account_status')
+        .eq('id', session.user.id)
+        .maybeSingle();
 
-if (userData != null && userData['verification_status'] != 'BLOCKED') {
-if (mounted) {
-Provider.of<AuthProvider>(context, listen: false).setRole(userData['role']?.toString());
-Navigator.of(context)
-    .pushReplacementNamed('/home');
-}
+    final isBlocked = userData != null && (userData['account_status'] == true);
 
-return;
-} else {
-await Supabase.instance.client.auth.signOut();
-}
+    if (userData != null && !isBlocked) {
+      if (mounted) {
+        Provider.of<AuthProvider>(context, listen: false).setRole(userData['role']?.toString());
+        Navigator.of(context)
+            .pushReplacementNamed('/home');
+      }
+
+      return;
+    } else {
+      await Supabase.instance.client.auth.signOut();
+    }
 } catch (e) {
 debugPrint(
 'Auto-login session check error: $e',

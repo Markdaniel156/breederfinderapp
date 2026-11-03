@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -170,11 +171,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       bool faceDetected = false;
       String? detectionError;
       try {
-        final inputImage = InputImage.fromFilePath(pickedFile.path);
-        final faceDetector = FaceDetector(options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate, minFaceSize: 0.1));
-        final List<Face> faces = await faceDetector.processImage(inputImage);
-        faceDetected = faces.isNotEmpty;
-        await faceDetector.close();
+        if (kIsWeb) {
+          faceDetected = true; // Skip native ML Kit face detection on web browsers
+        } else {
+          final inputImage = InputImage.fromFilePath(pickedFile.path);
+          final faceDetector = FaceDetector(options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate, minFaceSize: 0.1));
+          final List<Face> faces = await faceDetector.processImage(inputImage);
+          faceDetected = faces.isNotEmpty;
+          await faceDetector.close();
+        }
       } catch (e) { detectionError = e.toString(); }
 
       await Future.delayed(const Duration(milliseconds: 2500));
@@ -307,7 +312,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         'id': userId, 'email': _emailController.text.trim(), 'full_name': _nameController.text.trim(),
         'phone_number': _phoneController.text.trim(), 'city_municipality': _selectedCity, 'barangay': _selectedBarangay,
         'role': 'CUSTOMER', 'id_type': _selectedIdType, 'avatar_url': avatarUrl, 'id_front_url': idFrontUrl,
-        'id_back_url': idBackUrl, 'selfie_image_url': selfieImageUrl, 'verification_status': 'PENDING', 'fcm_token': fcmToken,
+        'id_back_url': idBackUrl, 'selfie_image_url': selfieImageUrl, 'verification_status': 'PENDING',
+        'account_status': false, 'fcm_token': fcmToken,
       });
 
       if (res.user != null && mounted) _showSuccessDialog();
@@ -320,7 +326,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   void _showSuccessDialog() {
     showDialog(
       context: context, barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         backgroundColor: Colors.white,
         content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -334,15 +340,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           SizedBox(width: double.infinity, height: 50,
             child: ElevatedButton(
               onPressed: () async {
-                Navigator.pop(context); // Close dialog
+                final navigator = Navigator.of(context);
                 try {
                   await Supabase.instance.client.auth.signOut();
                 } catch (e) {
                   debugPrint('Sign out error: $e');
                 }
-                if (context.mounted) {
-                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                }
+                navigator.pushNamedAndRemoveUntil('/login', (route) => false);
               },
               style: ElevatedButton.styleFrom(backgroundColor: _themeGreen, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
               child: const Text('PROCEED TO LOGIN', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.5)),
@@ -759,7 +763,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                     ),
                     child: ClipOval(child: Stack(children: [
                       if (_selfieImage != null)
-                        Opacity(opacity: _isScanningFace ? 0.5 : 1.0, child: Image.file(_selfieImage!, fit: BoxFit.cover, width: 90, height: 90))
+                        Opacity(opacity: _isScanningFace ? 0.5 : 1.0, child: kIsWeb ? Image.network(_selfieImage!.path, fit: BoxFit.cover, width: 90, height: 90) : Image.file(_selfieImage!, fit: BoxFit.cover, width: 90, height: 90))
                       else
                         Center(child: Icon(Icons.face_unlock_rounded, size: 28, color: _themeGreen.withValues(alpha: 0.5))),
                       if (_isScanningFace)
@@ -940,7 +944,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             boxShadow: image != null ? [BoxShadow(color: _themeGreen.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 2))] : null,
           ),
           child: image != null
-              ? ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.file(image, fit: BoxFit.cover, width: double.infinity))
+              ? ClipRRect(borderRadius: BorderRadius.circular(14), child: kIsWeb ? Image.network(image.path, fit: BoxFit.cover, width: double.infinity) : Image.file(image, fit: BoxFit.cover, width: double.infinity))
               : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Container(
               padding: const EdgeInsets.all(10),

@@ -206,11 +206,12 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildSearchingView(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Stack(
+          Stack(
             alignment: Alignment.center,
             children: [
               SizedBox(
@@ -218,20 +219,20 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                 height: 120,
                 child: CircularProgressIndicator(
                   strokeWidth: 6,
-                  color: Color(0xFF2D6A4F),
-                  backgroundColor: Color(0xFFE9F5F2),
+                  color: const Color(0xFF2D6A4F),
+                  backgroundColor: isDark ? Colors.white.withValues(alpha: 0.1) : const Color(0xFFE9F5F2),
                 ),
               ),
-              _PulseIcon(),
+              const _PulseIcon(),
             ],
           ),
           const SizedBox(height: 40),
-          const Text(
+          Text(
             'Finding Your Perfect Match...',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1B4332),
+              color: isDark ? Colors.white : const Color(0xFF1B4332),
             ),
           ),
           const SizedBox(height: 12),
@@ -239,7 +240,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             'Scanning breeders and traders near you',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[600],
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
             ),
           ),
         ],
@@ -254,7 +255,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           child: LinearProgressIndicator(
             value: (_currentStep + 1) / 6,
-            backgroundColor: Colors.grey[200],
+            backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[200],
             valueColor: AlwaysStoppedAnimation<Color>(themeGreen),
             borderRadius: BorderRadius.circular(10),
             minHeight: 8,
@@ -282,6 +283,11 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildTypeStep(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     final types = [
       {'name': 'Breeder', 'desc': 'Find verified professional breeders', 'icon': Icons.pets_rounded},
       {'name': 'Trader', 'desc': 'Find the best deals in AniMarket', 'icon': Icons.storefront_rounded},
@@ -297,7 +303,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
         const SizedBox(height: 8),
         Text(
           'Choose if you want professional breeding or trading animals.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtitleColor, fontSize: 16),
         ),
         const SizedBox(height: 32),
         ...types.map((type) {
@@ -309,17 +315,17 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isSelected ? themeGreen : Colors.white,
+                color: isSelected ? themeGreen : cardColor,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
                 ],
                 border: Border.all(
-                  color: isSelected ? themeGreen : Colors.transparent,
+                  color: isSelected ? themeGreen : (isDark ? Colors.grey[800]! : Colors.transparent),
                   width: 2,
                 ),
               ),
@@ -340,14 +346,14 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : Colors.black87,
+                            color: isSelected ? Colors.white : textColor,
                           ),
                         ),
                         Text(
                           type['desc'] as String,
                           style: TextStyle(
                             fontSize: 13,
-                            color: isSelected ? Colors.white.withValues(alpha: 0.8) : Colors.grey[600],
+                            color: isSelected ? Colors.white.withValues(alpha: 0.8) : subtitleColor,
                           ),
                         ),
                       ],
@@ -365,6 +371,10 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildCategoryStep(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
     final breederProvider = Provider.of<BreederProvider>(context, listen: false);
     
     // Dynamically get categories that actually have listings for the selected type
@@ -389,7 +399,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
         const SizedBox(height: 8),
         Text(
           'Select from available $_searchType animal types.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtitleColor, fontSize: 16),
         ),
         const SizedBox(height: 32),
         GridView.builder(
@@ -415,17 +425,17 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: isSelected ? themeGreen.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05),
+                      color: isSelected ? themeGreen.withValues(alpha: 0.2) : Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
                       blurRadius: 15,
                       offset: const Offset(0, 6),
                     ),
                   ],
                   border: Border.all(
-                    color: isSelected ? themeGreen : Colors.transparent,
+                    color: isSelected ? themeGreen : (isDark ? Colors.grey[800]! : Colors.transparent),
                     width: 3,
                   ),
                 ),
@@ -450,7 +460,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: isSelected ? themeGreen : Colors.black87,
+                          color: isSelected ? themeGreen : textColor,
                         ),
                       ),
                     ),
@@ -465,6 +475,9 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildBreedStep(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
     final List<String> breeds = ['Any', ...(animalBreeds[_selectedCategory] ?? [])];
 
     return Column(
@@ -477,17 +490,22 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
         const SizedBox(height: 8),
         Text(
           'Choose a breed for your $_selectedCategory.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtitleColor, fontSize: 16),
         ),
         const SizedBox(height: 32),
         DropdownButtonFormField<String>(
           initialValue: breeds.contains(_selectedBreed) ? _selectedBreed : breeds[0],
+          dropdownColor: cardColor,
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white,
+            fillColor: cardColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: isDark ? Colors.grey[800]! : Colors.transparent),
             ),
             prefixIcon: Icon(Icons.pets, color: themeGreen),
           ),
@@ -510,6 +528,10 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildBudgetStep(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -520,7 +542,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
         const SizedBox(height: 8),
         Text(
           'Input the maximum price you are willing to pay.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtitleColor, fontSize: 16),
         ),
         const SizedBox(height: 32),
         TextField(
@@ -541,7 +563,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             prefixText: '₱ ',
             prefixStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: themeGreen),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: cardColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
@@ -549,7 +571,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide(
-                color: _budgetError != null ? Colors.redAccent : Colors.transparent,
+                color: _budgetError != null ? Colors.redAccent : (isDark ? Colors.grey[800]! : Colors.transparent),
                 width: 1,
               ),
             ),
@@ -575,6 +597,11 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildLocationStep(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -585,7 +612,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
         const SizedBox(height: 8),
         Text(
           'Select a place in the 5th District or choose Any.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtitleColor, fontSize: 16),
         ),
         const SizedBox(height: 32),
         Wrap(
@@ -599,17 +626,17 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected ? themeGreen : Colors.white,
+                  color: isSelected ? themeGreen : cardColor,
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)
+                    BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05), blurRadius: 8)
                   ],
-                  border: Border.all(color: isSelected ? themeGreen : Colors.transparent),
+                  border: Border.all(color: isSelected ? themeGreen : (isDark ? Colors.grey[800]! : Colors.transparent)),
                 ),
                 child: Text(
                   city,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.black87,
+                    color: isSelected ? Colors.white : textColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -622,6 +649,11 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildFinalStep(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final borderColor = isDark ? Colors.grey[800]! : Colors.transparent;
     final sexOptions = ['Male', 'Female', 'Any'];
     final ageOptions = ['Young', 'Adult', 'Any'];
 
@@ -635,7 +667,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
         const SizedBox(height: 8),
         Text(
           'Input or select your preferences for sex and age.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          style: TextStyle(color: subtitleColor, fontSize: 16),
         ),
         const SizedBox(height: 32),
         const Text('Preferred Sex *', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -654,7 +686,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             errorText: _sexError,
             errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: cardColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
@@ -662,7 +694,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide(
-                color: _sexError != null ? Colors.redAccent : Colors.transparent,
+                color: _sexError != null ? Colors.redAccent : borderColor,
                 width: 1,
               ),
             ),
@@ -697,7 +729,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
               selected: isSelected,
               selectedColor: themeGreen,
               labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
+                color: isSelected ? Colors.white : textColor,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
               onSelected: (selected) {
@@ -728,7 +760,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             errorText: _ageError,
             errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: cardColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
@@ -736,7 +768,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide(
-                color: _ageError != null ? Colors.redAccent : Colors.transparent,
+                color: _ageError != null ? Colors.redAccent : borderColor,
                 width: 1,
               ),
             ),
@@ -771,7 +803,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
               selected: isSelected,
               selectedColor: themeGreen,
               labelStyle: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
+                color: isSelected ? Colors.white : textColor,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
               onSelected: (selected) {
@@ -790,12 +822,13 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildNavigationButtons(Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5)),
+          BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05), blurRadius: 10, offset: const Offset(0, -5)),
         ],
       ),
       child: Row(
@@ -972,7 +1005,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
               const Spacer(),
               Text(
                 '${_matches.length} items found',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[400] : Colors.grey[600], fontSize: 12),
               ),
             ],
           ),
@@ -994,21 +1027,22 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildNoMatchesState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 80, color: Colors.grey[300]),
+          Icon(Icons.search_off_rounded, size: 80, color: isDark ? Colors.grey[700] : Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No matches found',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Try widening your budget or search area.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey),
           ),
         ],
       ),
@@ -1016,6 +1050,10 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
   }
 
   Widget _buildMatchCard(Breeder breeder, Color themeGreen) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     String displayPrice = '';
     if (breeder.animals.isNotEmpty) {
       final prices = breeder.animals.map((a) => a.price).toList();
@@ -1033,10 +1071,10 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: InkWell(
@@ -1060,7 +1098,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                         width: double.infinity,
                         fit: BoxFit.cover,
                       )
-                    : Container(height: 180, color: Colors.grey[200], child: const Icon(Icons.pets, size: 50, color: Colors.grey)),
+                    : Container(height: 180, color: isDark ? Colors.grey[800] : Colors.grey[200], child: const Icon(Icons.pets, size: 50, color: Colors.grey)),
                 ),
                 Positioned(
                   top: 12,
@@ -1095,7 +1133,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                           const SizedBox(width: 4),
                           Text(
                             breeder.averageRating.toStringAsFixed(1),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black87),
                           ),
                         ],
                       ),
@@ -1134,7 +1172,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                         breeder.breed +
                             (breeder.gender.isNotEmpty ? ' • ${breeder.gender}' : '') +
                             (breeder.age.isNotEmpty ? ' • ${breeder.age}' : ''),
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        style: TextStyle(color: subtitleColor, fontSize: 13),
                       ),
                     ],
                   ),
@@ -1146,7 +1184,7 @@ class _SmartMatchingScreenState extends State<SmartMatchingScreen> {
                       Expanded(
                         child: Text(
                           breeder.address,
-                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                          style: TextStyle(color: subtitleColor, fontSize: 13),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  // ── FIXED: Returns remaining lockout seconds (not minutes) for precision ──
+  // ── Returns remaining lockout seconds (not minutes) for precision ──
   Future<int> _getRemainingLockoutSeconds() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) return 0;
@@ -99,7 +99,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         return 0;
       }
 
-      // ✅ Return remaining seconds for precise ceiling-minute display
       return expiryTime.difference(now).inSeconds;
     } catch (e) {
       debugPrint('Error checking lockout in DB: $e');
@@ -138,14 +137,29 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             .from('create_account')
             .update({
           'login_attempts': currentAttempts,
-          // ✅ Always update last_failed_login to NOW so the 10-min window
-          //    is anchored to the most recent failed attempt
+          // Always update last_failed_login to NOW so the 10-min window
+          // is anchored to the most recent failed attempt
           'last_failed_login': DateTime.now().toUtc().toIso8601String(),
         })
             .eq('email', email);
       }
     } catch (e) {
       debugPrint('Error updating failed attempts in DB: $e');
+    }
+  }
+
+  /// Returns true/false if we could check, or null if the lookup failed.
+  Future<bool?> _emailExists(String email) async {
+    try {
+      final row = await Supabase.instance.client
+          .from('create_account')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+      return row != null;
+    } catch (e) {
+      debugPrint('Error checking email existence: $e');
+      return null;
     }
   }
 
@@ -191,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       return;
     }
 
-    // ✅ Use seconds-based lockout check for accuracy
+    // Seconds-based lockout check for accuracy
     final remainingSeconds = await _getRemainingLockoutSeconds();
     if (remainingSeconds > 0) {
       _showError('Too many failed attempts. Try again in ${_formatLockoutTime(remainingSeconds)}.');
@@ -209,8 +223,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     try {
       final supabase = Supabase.instance.client;
       final response = await supabase.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: password,
       );
 
       if (response.user != null) {
@@ -221,24 +235,25 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         await _updateFCMToken();
 
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        
+
         // Sync role if an application was recently approved
         final newRole = await authProvider.syncUserRoleAfterApproval(response.user!.id);
 
         final userData = await supabase
             .from('create_account')
-            .select('verification_status, role')
+            .select('verification_status, role, account_status')
             .eq('id', response.user!.id)
             .single();
 
         final status = userData['verification_status'];
+        final isBlocked = userData['account_status'] == true;
         final role = userData['role']?.toString();
 
         if (mounted) {
           authProvider.setRole(role);
         }
 
-        if (status == 'BLOCKED') {
+        if (isBlocked) {
           await supabase.auth.signOut();
           if (mounted) _showBlockedDialog();
           return;
@@ -264,33 +279,32 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             await prefs.setBool('notified_approved_${response.user!.id}', true);
           }
         }
-        // PENDING status is now allowed to enter the app directly
+        // PENDING status is allowed to enter the app directly
       }
 
       final prefs = await SharedPreferences.getInstance();
       if (_rememberMe) {
-        await prefs.setString('remembered_email', _emailController.text.trim());
-        await prefs.setString('remembered_password', _passwordController.text);
+        await prefs.setString('remembered_email', email);
+        await prefs.setString('remembered_password', password);
       } else {
         await prefs.remove('remembered_email');
         await prefs.remove('remembered_password');
       }
 
       if (mounted) {
-        // Directed directly to home, subscription is no longer mandatory
         Navigator.pushReplacementNamed(context, '/home');
       }
     } on AuthException catch (error) {
       await _handleFailedAttempt();
       if (mounted) {
-        _applyFieldErrors(error.message);
+        await _applyFieldErrors(error.message, email);
       }
     } catch (error) {
       if (mounted) {
         if (error.toString().contains('SocketException') || error.toString().contains('Failed host lookup')) {
           _connectivityService.showNoInternetSnackBar(context);
         } else {
-          _applyFieldErrors('An unexpected error occurred. Please try again.');
+          await _applyFieldErrors('An unexpected error occurred. Please try again.', email);
         }
       }
     } finally {
@@ -313,31 +327,47 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     });
   }
 
-  void _applyFieldErrors(String errorMessage) {
+  Future<void> _applyFieldErrors(String errorMessage, String email) async {
     final msg = errorMessage.toLowerCase();
-    if (msg.contains('invalid login credentials')) {
-      _setFieldError('email', ' '); // Highlight red border
-      _setFieldError('password', 'Invalid email or password');
+
+    if (msg.contains('invalid login credentials') || msg.contains('invalid_credentials')) {
+      final exists = await _emailExists(email);
+      if (!mounted) return;
+
+      if (exists == false) {
+        // Email doesn't exist -> email field only
+        _setFieldError('password', null);
+        _setFieldError('email', 'No account found with this email');
+      } else if (exists == true) {
+        // Email exists -> password is wrong -> password field only
+        _setFieldError('email', null);
+        _setFieldError('password', 'Incorrect password');
+      } else {
+        // Lookup failed, fall back to a generic message
+        _setFieldError('email', ' '); // Highlight red border
+        _setFieldError('password', 'Invalid email or password');
+      }
     } else if (msg.contains('gateway timeout') ||
-               msg.contains('bad gateway') ||
-               msg.contains('504') ||
-               msg.contains('502') ||
-               msg.contains('503') ||
-               msg.contains('timeout') ||
-               msg.contains('timed out') ||
-               msg.contains('connection') ||
-               msg.contains('network') ||
-               msg.contains('server error') ||
-               msg.contains('service unavailable')) {
+        msg.contains('bad gateway') ||
+        msg.contains('504') ||
+        msg.contains('502') ||
+        msg.contains('503') ||
+        msg.contains('timeout') ||
+        msg.contains('timed out') ||
+        msg.contains('connection') ||
+        msg.contains('network') ||
+        msg.contains('server error') ||
+        msg.contains('service unavailable')) {
       _setFieldError('email', null);
       _setFieldError('password', null);
       _showError(errorMessage);
-    } else if (msg.contains('password') && (msg.contains('length') || msg.contains('characters') || msg.contains('weak') || msg.contains('match'))) {
+    } else if (msg.contains('password') &&
+        (msg.contains('length') || msg.contains('characters') || msg.contains('weak') || msg.contains('match'))) {
       _setFieldError('email', null);
       _setFieldError('password', errorMessage);
     } else if (msg.contains('email') || msg.contains('user not found')) {
-      _setFieldError('email', errorMessage);
       _setFieldError('password', null);
+      _setFieldError('email', errorMessage);
     } else {
       _setFieldError('email', null);
       _setFieldError('password', null);
@@ -433,7 +463,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       ),
     );
   }
-
 
   Future<void> _updateFCMToken() async {
     final fcmToken = await FirebaseMessaging.instance.getToken();

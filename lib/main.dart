@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -29,6 +30,7 @@ import 'screens/splash_screen.dart';
 import 'services/geofencing_service.dart';
 import 'services/supabase_config.dart';
 import 'services/connectivity_service.dart';
+import 'services/presence_service.dart';
 import 'utils/system_ui_utils.dart';
 import 'services/notification_service.dart';
 
@@ -118,55 +120,61 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Initialize Firebase
-  await Firebase.initializeApp();
+  if (!kIsWeb) {
+    try {
+      // ✅ Initialize Firebase
+      await Firebase.initializeApp();
 
-  // ✅ Initialize notifications
-  await NotificationService.initialize();
+      // ✅ Initialize notifications
+      await NotificationService.initialize();
 
-  // ✅ Register background message handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // ✅ Register background message handler
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // ✅ Request notification permissions
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
-  await messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+      // ✅ Request notification permissions
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
 
-  // ✅ FOREGROUND notification handler — shows notification while app is open
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    debugPrint('Foreground message received: ${message.messageId}');
-    debugPrint('Title: ${message.notification?.title}');
-    debugPrint('Body: ${message.notification?.body}');
-    _showLocalNotification(message); // manually show it as local notification
-  });
+      // ✅ FOREGROUND notification handler — shows notification while app is open
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint('Foreground message received: ${message.messageId}');
+        debugPrint('Title: ${message.notification?.title}');
+        debugPrint('Body: ${message.notification?.body}');
+        _showLocalNotification(message); // manually show it as local notification
+      });
 
-  // ✅ When notification is tapped and app was in BACKGROUND (not killed)
-  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    debugPrint('Notification tapped (background): ${message.messageId}');
-    NotificationNavigationHandler.handleRemoteMessageTap(message.data);
-  });
+      // ✅ When notification is tapped and app was in BACKGROUND (not killed)
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        debugPrint('Notification tapped (background): ${message.messageId}');
+        NotificationNavigationHandler.handleRemoteMessageTap(message.data);
+      });
 
-  // ✅ When notification is tapped and app was TERMINATED
-  final RemoteMessage? initialMessage = await messaging.getInitialMessage();
-  if (initialMessage != null) {
-    debugPrint('App opened from terminated via notification: ${initialMessage.messageId}');
-    NotificationNavigationHandler.handleRemoteMessageTap(initialMessage.data);
-  }
+      // ✅ When notification is tapped and app was TERMINATED
+      final RemoteMessage? initialMessage = await messaging.getInitialMessage();
+      if (initialMessage != null) {
+        debugPrint('App opened from terminated via notification: ${initialMessage.messageId}');
+        NotificationNavigationHandler.handleRemoteMessageTap(initialMessage.data);
+      }
 
-  // ✅ Token refresh listener — keeps Supabase updated automatically
-  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user != null) {
-      await Supabase.instance.client
-          .from('create_account')
-          .update({'fcm_token': newToken})
-          .eq('id', user.id);
-      debugPrint('FCM Token refreshed and updated: $newToken');
+      // ✅ Token refresh listener — keeps Supabase updated automatically
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user != null) {
+          await Supabase.instance.client
+              .from('create_account')
+              .update({'fcm_token': newToken})
+              .eq('id', user.id);
+          debugPrint('FCM Token refreshed and updated: $newToken');
+        }
+      });
+    } catch (e) {
+      debugPrint('Firebase init error (ignored on web): $e');
     }
-  });
+  }
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
@@ -182,26 +190,34 @@ void main() async {
   ));
 
   final geofenceService = GeofencingService();
-  await geofenceService.initialize();
+  if (!kIsWeb) {
+    try {
+      await geofenceService.initialize();
+    } catch (e) {
+      debugPrint('Geofence init error: $e');
+    }
+  }
 
   // Update FCM token if user is already logged in
-  final currentUser = Supabase.instance.client.auth.currentUser;
-  if (currentUser != null) {
-    try {
-      debugPrint('Fetching FCM Token for user: ${currentUser.id}...');
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      if (fcmToken != null) {
-        debugPrint('FCM Token found: $fcmToken');
-        await Supabase.instance.client
-            .from('create_account')
-            .update({'fcm_token': fcmToken})
-            .eq('id', currentUser.id);
-        debugPrint('Supabase updated successfully with token.');
-      } else {
-        debugPrint('FCM Token is NULL. Ensure Google Play Services are available.');
+  if (!kIsWeb) {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser != null) {
+      try {
+        debugPrint('Fetching FCM Token for user: ${currentUser.id}...');
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          debugPrint('FCM Token found: $fcmToken');
+          await Supabase.instance.client
+              .from('create_account')
+              .update({'fcm_token': fcmToken})
+              .eq('id', currentUser.id);
+          debugPrint('Supabase updated successfully with token.');
+        } else {
+          debugPrint('FCM Token is NULL.');
+        }
+      } catch (e) {
+        debugPrint('CRITICAL ERROR updating FCM token: $e');
       }
-    } catch (e) {
-      debugPrint('CRITICAL ERROR updating FCM token: $e');
     }
   }
 
@@ -215,6 +231,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider.value(value: PresenceService()),
       ],
       child: MyApp(geofenceService: geofenceService),
     ),
@@ -237,6 +254,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _setupAuthListener();
+    PresenceService().initialize();
   }
 
   void _setupAuthListener() {

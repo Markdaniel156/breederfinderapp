@@ -221,7 +221,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                         ),
                       );
-                      if (updated == true) _loadUserData();
+                      if (!mounted) return;
+                      if (updated == true) {
+                        _loadUserData();
+                        try {
+                          Provider.of<BreederProvider>(context, listen: false).fetchBreeders();
+                        } catch (_) {}
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.all(7),
@@ -371,7 +377,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
                     );
-                    if (updated == true) _loadUserData();
+                    if (!mounted) return;
+                    if (updated == true) {
+                      _loadUserData();
+                      try {
+                        Provider.of<BreederProvider>(context, listen: false).fetchBreeders();
+                      } catch (_) {}
+                    }
                   },
                 ),
                 const SizedBox(height: 12),
@@ -1036,6 +1048,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   void _showPostDetails(
       BuildContext context, Breeder item, bool isDark, Color themeGreen) {
+    final parentContext = context;
     final isOwner = item.userId == supabase.auth.currentUser?.id;
 
     showModalBottomSheet(
@@ -1255,15 +1268,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 itemId, itemType);
                             if (!context.mounted) return;
                             Navigator.pop(context); // Close details sheet
+                            if (!parentContext.mounted) return;
                             _showStatusDialog(
-                              context: context,
+                              context: parentContext,
                               icon: Icons.check_rounded,
                               color: Colors.green,
                               title: 'Listing deleted',
                               message:
                               'Your $itemType post and its images have been removed.',
                               primaryLabel: 'OK',
-                              onPrimary: () => Navigator.of(context).pop(),
+                              onPrimary: () => Navigator.of(parentContext).pop(),
                             );
                           } catch (e) {
                             if (!context.mounted) return;

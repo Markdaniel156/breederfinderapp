@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -19,27 +20,79 @@ class ChatService {
         .from('messages')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
-        .map((data) {
+        .asyncMap((data) async {
+      // One check covers both directions (I blocked them / they blocked me)
+      final isBlocked = await isBlockedEitherWay(otherUserId);
+
       return data
-          .where((map) =>
-      (map['sender_id'] == myId && map['receiver_id'] == otherUserId) ||
-          (map['sender_id'] == otherUserId && map['receiver_id'] == myId))
+          .where((map) {
+        final senderId = map['sender_id'];
+        final receiverId = map['receiver_id'];
+
+        final inThisChat =
+            (senderId == myId && receiverId == otherUserId) ||
+                (senderId == otherUserId && receiverId == myId);
+        if (!inThisChat) return false;
+
+        // Hide messages sent by the other user when a block exists
+        if (isBlocked && senderId == otherUserId) return false;
+
+        return true;
+      })
           .map((map) => ChatMessage.fromMap(map, myId))
           .toList();
     });
   }
 
-  Future<void> sendMessage(String receiverId, String text) async {
+  Future<void> sendMessage(
+      String receiverId,
+      String text, {
+        String? replyToId,
+        String? replyToSender,
+        String? replyToText,
+        String? replyToImageUrl,
+      }) async {
     final myId = currentUserId;
     if (myId == null) return;
 
-    final message = {
+    if (await isBlockedEitherWay(receiverId)) {
+      throw Exception('Cannot send message: user is blocked.');
+    }
+
+    String finalMessageText = text;
+    if (replyToSender != null || replyToText != null || replyToImageUrl != null) {
+      finalMessageText = jsonEncode({
+        'reply': {
+          if (replyToId != null) 'id': replyToId,
+          if (replyToSender != null) 'sender': replyToSender,
+          if (replyToText != null) 'text': replyToText,
+          if (replyToImageUrl != null) 'imageUrl': replyToImageUrl,
+        },
+        'text': text,
+      });
+    }
+
+    final message = <String, dynamic>{
       'sender_id': myId,
       'receiver_id': receiverId,
-      'message_text': text,
+      'message_text': finalMessageText,
     };
 
-    await _supabase.from('messages').insert(message);
+    if (replyToId != null) message['reply_to_id'] = replyToId;
+    if (replyToSender != null) message['reply_to_sender'] = replyToSender;
+    if (replyToText != null) message['reply_to_text'] = replyToText;
+    if (replyToImageUrl != null) message['reply_to_image_url'] = replyToImageUrl;
+
+    try {
+      await _supabase.from('messages').insert(message);
+    } catch (e) {
+      debugPrint('Note: Insert with explicit reply_to columns failed, falling back to message payload: $e');
+      await _supabase.from('messages').insert({
+        'sender_id': myId,
+        'receiver_id': receiverId,
+        'message_text': finalMessageText,
+      });
+    }
     updateLastSeen();
   }
 
@@ -59,9 +112,35 @@ class ChatService {
     }
   }
 
-  Future<void> sendImageMessage(String receiverId, File imageFile) async {
+  Future<void> markAllMessagesAsRead() async {
     final myId = currentUserId;
     if (myId == null) return;
+
+    try {
+      await _supabase
+          .from('messages')
+          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('receiver_id', myId)
+          .filter('read_at', 'is', null);
+    } catch (e) {
+      debugPrint('Error marking all messages as read: $e');
+    }
+  }
+
+  Future<void> sendImageMessage(
+      String receiverId,
+      File imageFile, {
+        String? replyToId,
+        String? replyToSender,
+        String? replyToText,
+        String? replyToImageUrl,
+      }) async {
+    final myId = currentUserId;
+    if (myId == null) return;
+
+    if (await isBlockedEitherWay(receiverId)) {
+      throw Exception('Cannot send message: user is blocked.');
+    }
 
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -75,14 +154,42 @@ class ChatService {
 
       final imageUrl = _supabase.storage.from('chat_images').getPublicUrl(filePath);
 
-      final message = {
+      String finalMessageText = '';
+      if (replyToSender != null || replyToText != null || replyToImageUrl != null) {
+        finalMessageText = jsonEncode({
+          'reply': {
+            if (replyToId != null) 'id': replyToId,
+            if (replyToSender != null) 'sender': replyToSender,
+            if (replyToText != null) 'text': replyToText,
+            if (replyToImageUrl != null) 'imageUrl': replyToImageUrl,
+          },
+          'text': '',
+        });
+      }
+
+      final message = <String, dynamic>{
         'sender_id': myId,
         'receiver_id': receiverId,
-        'message_text': '',
+        'message_text': finalMessageText,
         'image_url': imageUrl,
       };
 
-      await _supabase.from('messages').insert(message);
+      if (replyToId != null) message['reply_to_id'] = replyToId;
+      if (replyToSender != null) message['reply_to_sender'] = replyToSender;
+      if (replyToText != null) message['reply_to_text'] = replyToText;
+      if (replyToImageUrl != null) message['reply_to_image_url'] = replyToImageUrl;
+
+      try {
+        await _supabase.from('messages').insert(message);
+      } catch (e) {
+        debugPrint('Note: Insert with explicit reply_to columns failed, falling back to message payload: $e');
+        await _supabase.from('messages').insert({
+          'sender_id': myId,
+          'receiver_id': receiverId,
+          'message_text': finalMessageText,
+          'image_url': imageUrl,
+        });
+      }
       updateLastSeen();
     } catch (e) {
       debugPrint('Error sending image message: $e');
@@ -90,9 +197,85 @@ class ChatService {
     }
   }
 
+  Future<void> sendVideoMessage(
+      String receiverId,
+      File videoFile, {
+        String? replyToId,
+        String? replyToSender,
+        String? replyToText,
+        String? replyToImageUrl,
+      }) async {
+    final myId = currentUserId;
+    if (myId == null) return;
+
+    if (await isBlockedEitherWay(receiverId)) {
+      throw Exception('Cannot send message: user is blocked.');
+    }
+
+    try {
+      final ext = videoFile.path.split('.').last.toLowerCase();
+      final validExt = (ext == 'mov' || ext == 'webm' || ext == 'm4v' || ext == 'mkv') ? ext : 'mp4';
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$validExt';
+      final filePath = '$myId/$fileName';
+
+      await _supabase.storage.from('chat_images').upload(
+        filePath,
+        videoFile,
+        fileOptions: FileOptions(
+          cacheControl: '3600',
+          upsert: false,
+          contentType: 'video/$validExt',
+        ),
+      );
+
+      final videoUrl = _supabase.storage.from('chat_images').getPublicUrl(filePath);
+
+      String finalMessageText = '';
+      if (replyToSender != null || replyToText != null || replyToImageUrl != null) {
+        finalMessageText = jsonEncode({
+          'reply': {
+            if (replyToId != null) 'id': replyToId,
+            if (replyToSender != null) 'sender': replyToSender,
+            if (replyToText != null) 'text': replyToText,
+            if (replyToImageUrl != null) 'imageUrl': replyToImageUrl,
+          },
+          'text': '',
+        });
+      }
+
+      final message = <String, dynamic>{
+        'sender_id': myId,
+        'receiver_id': receiverId,
+        'message_text': finalMessageText,
+        'image_url': videoUrl,
+      };
+
+      if (replyToId != null) message['reply_to_id'] = replyToId;
+      if (replyToSender != null) message['reply_to_sender'] = replyToSender;
+      if (replyToText != null) message['reply_to_text'] = replyToText;
+      if (replyToImageUrl != null) message['reply_to_image_url'] = replyToImageUrl;
+
+      try {
+        await _supabase.from('messages').insert(message);
+      } catch (e) {
+        debugPrint('Note: Insert with explicit reply_to columns failed, falling back to message payload: $e');
+        await _supabase.from('messages').insert({
+          'sender_id': myId,
+          'receiver_id': receiverId,
+          'message_text': finalMessageText,
+          'image_url': videoUrl,
+        });
+      }
+      updateLastSeen();
+    } catch (e) {
+      debugPrint('Error sending video message: $e');
+      rethrow;
+    }
+  }
+
   Future<void> deleteMessage(String messageId) async {
     try {
-      // We only set is_deleted to true. 
+      // We only set is_deleted to true.
       // We keep the original data for a moment so the UI knows if it was a photo or text
       // but the UI will hide the content because is_deleted is true.
       await _supabase
@@ -172,8 +355,8 @@ class ChatService {
     return _supabase.storage.from('avatars').getPublicUrl(avatarUrl);
   }
 
-  Future<Map<String, dynamic>?> getUserDetails(String userId) async {
-    if (_userCache.containsKey(userId)) {
+  Future<Map<String, dynamic>?> getUserDetails(String userId, {bool forceRefresh = false}) async {
+    if (!forceRefresh && _userCache.containsKey(userId)) {
       final cached = _userCache[userId];
       if (cached != null && _isValidName(cached['full_name']) && cached['full_name'] != 'User') {
         return cached;
@@ -192,7 +375,7 @@ class ChatService {
             .select('full_name, avatar_url, last_seen')
             .eq('id', userId)
             .maybeSingle();
-        
+
         if (accountData != null) {
           bestName = accountData['full_name']?.toString();
           bestAvatar = accountData['avatar_url']?.toString();
@@ -255,6 +438,26 @@ class ChatService {
     }
   }
 
+  Future<DateTime?> getLastSeen(String userId) async {
+    try {
+      final data = await _supabase
+          .from('create_account')
+          .select('last_seen')
+          .eq('id', userId)
+          .maybeSingle();
+      if (data != null && data['last_seen'] != null) {
+        final lastSeenStr = data['last_seen'].toString();
+        if (_userCache.containsKey(userId)) {
+          _userCache[userId]!['last_seen'] = lastSeenStr;
+        }
+        return DateTime.tryParse(lastSeenStr);
+      }
+    } catch (e) {
+      debugPrint('Error getting last_seen for $userId: $e');
+    }
+    return null;
+  }
+
   Future<void> updateLastSeen() async {
     final myId = currentUserId;
     if (myId == null) return;
@@ -266,5 +469,92 @@ class ChatService {
     } catch (e) {
       debugPrint('Error updating last seen: $e');
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getChatSettings() async {
+    final myId = currentUserId;
+    if (myId == null) return [];
+    try {
+      final response = await _supabase
+          .from('user_chat_settings')
+          .select('target_user_id, is_pinned, is_archived, is_blocked')
+          .eq('user_id', myId);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Note: user_chat_settings query failed: $e');
+      return [];
+    }
+  }
+
+  /// Updates only MY settings row. No mirror row for the other user:
+  /// RLS prevents writing rows for another user, and the database function
+  /// `is_blocked_either_way` checks both directions anyway.
+  Future<void> updateChatSetting({
+    required String targetUserId,
+    bool? isPinned,
+    bool? isArchived,
+    bool? isBlocked,
+  }) async {
+    final myId = currentUserId;
+    if (myId == null) return;
+
+    final data = <String, dynamic>{
+      'user_id': myId,
+      'target_user_id': targetUserId,
+      if (isPinned != null) 'is_pinned': isPinned,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (isBlocked != null) 'is_blocked': isBlocked,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      await _supabase
+          .from('user_chat_settings')
+          .upsert(data, onConflict: 'user_id,target_user_id');
+    } catch (e) {
+      debugPrint('Upsert to user_chat_settings failed: $e');
+      rethrow; // so the UI doesn't show "blocked" when it actually failed
+    }
+  }
+
+  /// True if either user has blocked the other (calls the SQL function).
+  Future<bool> isBlockedEitherWay(String otherUserId) async {
+    final myId = currentUserId;
+    if (myId == null) return false;
+    try {
+      final res = await _supabase.rpc('is_blocked_either_way', params: {
+        'a': myId,
+        'b': otherUserId,
+      });
+      return res == true;
+    } catch (e) {
+      debugPrint('isBlockedEitherWay failed: $e');
+      return false;
+    }
+  }
+
+  /// True only if I blocked them (reads my own row, which RLS allows).
+  Future<bool> isUserBlocked(String otherUserId) async {
+    final myId = currentUserId;
+    if (myId == null) return false;
+    try {
+      final res = await _supabase
+          .from('user_chat_settings')
+          .select('is_blocked')
+          .eq('user_id', myId)
+          .eq('target_user_id', otherUserId)
+          .maybeSingle();
+      return res?['is_blocked'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// True only if THEY blocked me. Their row is hidden by RLS,
+  /// so this works out the answer from the either-way check.
+  Future<bool> isBlockedByOther(String otherUserId) async {
+    final either = await isBlockedEitherWay(otherUserId);
+    if (!either) return false;
+    return !(await isUserBlocked(otherUserId));
   }
 }

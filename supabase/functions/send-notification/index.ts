@@ -23,17 +23,37 @@ serve(async (req) => {
     let channelId = "verified_notifications"
     let dataPayload = {}
 
-    // --- HANDLE ACCOUNT VERIFICATION ---
+    // --- HANDLE ACCOUNT VERIFICATION & UNBLOCKING ---
     if (table === 'create_account') {
-      if (record.verification_status === old_record?.verification_status) {
-        return new Response('No change', { status: 200 })
+      console.log(`create_account update event: id=${record?.id}, old_status=${old_record?.account_status}, new_status=${record?.account_status}`);
+
+      targetToken = record?.fcm_token;
+      if (!targetToken && record?.id) {
+        const { data: uData } = await supabase
+          .from('create_account')
+          .select('fcm_token')
+          .eq('id', record.id)
+          .maybeSingle();
+        targetToken = uData?.fcm_token;
       }
-      targetToken = record.fcm_token
-      if (record.verification_status === 'APPROVED') {
+
+      const wasBlocked = old_record?.account_status === true ||
+                         String(old_record?.account_status).toLowerCase() === 'true';
+      const isUnblocked = record?.account_status === false ||
+                          String(record?.account_status).toLowerCase() === 'false';
+      const statusChanged = old_record?.account_status !== record?.account_status;
+
+      if (isUnblocked && (wasBlocked || statusChanged)) {
+        title = "Account Unblocked! 🎉"
+        body = "Your account has been unblocked by the administrator. You can now login to Breeder Finder."
+        dataPayload = { type: "account_unblocked", title, body }
+      } else if (record?.verification_status !== old_record?.verification_status && record?.verification_status === 'APPROVED') {
         title = "Account Approved! 🎉"
         body = "Congrats! You can now login to Breeder Finder."
+        dataPayload = { type: "account_approved", title, body }
       } else {
-        return new Response('Status ignored', { status: 200 })
+        console.log("No status transition matched in create_account webhook");
+        return new Response('Status ignored', { status: 200 });
       }
     }
     // --- HANDLE NEW MESSAGES ---

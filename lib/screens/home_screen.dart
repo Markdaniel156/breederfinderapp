@@ -42,9 +42,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   String _filterType = 'All'; // 'All', 'Breeder', 'Trader'
   String _searchQuery = '';
-  String? _filterAnimal;
-  String? _filterBreed;
-  String? _filterLocation;
   int _promoIndex = 0;
   String _displayedHint = '';
   final TextEditingController _searchController = TextEditingController();
@@ -54,6 +51,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   bool _isOffline = false;
   Position? _currentPosition;
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _accountStatusSubscription;
+  bool _isBlockedDialogShowing = false;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   Timer? _activityTimer;
@@ -72,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     _startPeriodicActivityUpdate();
     _startTypingAnimation();
     _checkConnectivity();
+    _listenToRealtimeAccountStatus();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       if (mounted) {
         final wasOffline = _isOffline;
@@ -109,12 +109,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   void _startTypingAnimation() async {
     final hints = [
-      'Search breeders...',
-      'Search specific breeds...',
-      'Search by location...',
-      'Find trusted traders...',
-      'Looking for a pet?',
-      'Search for contact details...',
+      'Search breeders, traders, or pets...',
+      'Search breeds (e.g. Shih Tzu, Persian)...',
+      'Search location (e.g. Binalbagan, Isabela)...',
+      'Search animals (e.g. Dog, Cat, Goat)...',
+      'Search by name, contact, or keywords...',
     ];
     int hintIndex = 0;
 
@@ -182,9 +181,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     WidgetsBinding.instance.removeObserver(this);
     _activityTimer?.cancel();
     _connectivitySubscription.cancel();
+    _accountStatusSubscription?.cancel();
     _fadeController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _listenToRealtimeAccountStatus() {
+    final user = supabase.auth.currentUser;
+    if (user == null || Provider.of<AuthProvider>(context, listen: false).isGuest) return;
+
+    try {
+      _accountStatusSubscription = supabase
+          .from('create_account')
+          .stream(primaryKey: ['id'])
+          .eq('id', user.id)
+          .listen((data) {
+            if (data.isNotEmpty) {
+              final isBlocked = data.first['account_status'] == true;
+              if (isBlocked && mounted) {
+                _showBlockedDialog();
+              }
+            }
+          }, onError: (error) {
+            debugPrint('Realtime account status error: $error');
+          });
+    } catch (e) {
+      debugPrint('Error setting up account status realtime stream: $e');
+    }
   }
 
   Future<void> _updateActivity() async {
@@ -198,11 +222,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       if (user != null) {
         final data = await supabase
             .from('create_account')
-            .select('verification_status')
+            .select('account_status')
             .eq('id', user.id)
             .single();
 
-        if (data['verification_status'] == 'BLOCKED') {
+        if (data['account_status'] == true) {
           if (mounted) _showBlockedDialog();
         }
       }
@@ -212,12 +236,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   }
 
   void _showBlockedDialog() {
-    if (!mounted) return;
+    if (!mounted || _isBlockedDialogShowing) return;
+    _isBlockedDialogShowing = true;
     _activityTimer?.cancel();
+    _accountStatusSubscription?.cancel();
 
     showDialog(
       context: context,
       barrierDismissible: false,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         backgroundColor: Colors.white,
@@ -282,11 +309,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
       if (user != null) {
         final data = await supabase
             .from('create_account')
-            .select('full_name, avatar_url, verification_status')
+            .select('full_name, avatar_url, account_status')
             .eq('id', user.id)
             .single();
 
-        if (data['verification_status'] == 'BLOCKED') {
+        if (data['account_status'] == true) {
           if (mounted) _showBlockedDialog();
           return;
         }
@@ -491,23 +518,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                     color: isDark ? Colors.grey[400] : Colors.grey[500], size: 18),
               ),
             )
-                : GestureDetector(
-              onTap: () => _showFilterBottomSheet(isDark),
-              child: Container(
-                margin: const EdgeInsets.all(11),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (_filterAnimal != null || _filterBreed != null || _filterLocation != null)
-                      ? themeGreen.withOpacity(0.1)
-                      : (isDark ? Colors.white.withOpacity(0.06) : Colors.grey.withOpacity(0.06)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.tune_rounded,
-                    color: (_filterAnimal != null || _filterBreed != null || _filterLocation != null)
-                        ? themeGreen
-                        : (isDark ? Colors.grey[500] : Colors.grey[500]), size: 18),
-              ),
-            ),
+                : null,
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(vertical: 17),
           ),
@@ -653,19 +664,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
   Widget _buildContent(BreederProvider provider, bool isDark) {
     final List<Breeder> allListings = provider.breeders.where((b) {
       final matchesType = _filterType == 'All' || b.type == _filterType;
-      final matchesSearch = _searchQuery.isEmpty ||
-          b.name.toLowerCase().contains(_searchQuery) ||
-          b.address.toLowerCase().contains(_searchQuery) ||
-          b.breed.toLowerCase().contains(_searchQuery) ||
-          b.category.toLowerCase().contains(_searchQuery) ||
-          b.contactNumber.toLowerCase().contains(_searchQuery);
+      final matchesSearch = _matchesGeneralSearch(b, _searchQuery);
 
-      final matchesAnimal = _filterAnimal == null || b.category.toLowerCase() == _filterAnimal!.toLowerCase();
-      final matchesBreed = _filterBreed == null || b.breed.toLowerCase().contains(_filterBreed!.toLowerCase());
-      final matchesLocation = _filterLocation == null || b.address.toLowerCase().contains(_filterLocation!.toLowerCase());
-
-      return matchesType && matchesSearch && matchesAnimal && matchesBreed && matchesLocation;
+      return matchesType && matchesSearch;
     }).toList();
+
+    // If searching, sort by search relevance score so best matches appear first
+    if (_searchQuery.isNotEmpty) {
+      allListings.sort((a, b) {
+        final scoreA = _calculateSearchScore(a, _searchQuery);
+        final scoreB = _calculateSearchScore(b, _searchQuery);
+        return scoreB.compareTo(scoreA);
+      });
+    }
 
     if (allListings.isEmpty) {
       return _buildFilteredEmptyState(isDark);
@@ -1135,165 +1146,130 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
     );
   }
 
-  void _showFilterBottomSheet(bool isDark) {
-    final provider = Provider.of<BreederProvider>(context, listen: false);
-    final categories = provider.breeders
-        .map((b) => b.category.trim())
-        .where((c) => c.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+  static final Map<String, List<String>> _searchSynonyms = {
+    'dog': ['puppy', 'pup', 'canine', 'dogs'],
+    'puppy': ['dog', 'pup', 'canine', 'dogs'],
+    'pup': ['dog', 'puppy', 'canine'],
+    'cat': ['kitten', 'kitty', 'feline', 'cats'],
+    'kitten': ['cat', 'kitty', 'feline', 'cats'],
+    'chicken': ['poultry', 'rooster', 'hen', 'chick', 'chickens'],
+    'poultry': ['chicken', 'rooster', 'hen', 'chick', 'bird', 'duck', 'ducks'],
+    'pig': ['swine', 'hog', 'piglet', 'pork', 'pigs'],
+    'swine': ['pig', 'hog', 'piglet', 'pigs'],
+    'cow': ['cattle', 'bull', 'calf', 'heifer', 'cows'],
+    'cattle': ['cow', 'bull', 'calf', 'cows'],
+    'goat': ['kid', 'goats'],
+    'horse': ['foal', 'stallion', 'mare', 'pony', 'horses'],
+    'carabao': ['water buffalo', 'buffalo', 'carabaos'],
+  };
 
-    String? tempAnimal = _filterAnimal;
-    final TextEditingController breedController = TextEditingController(text: _filterBreed);
-    final TextEditingController locationController = TextEditingController(text: _filterLocation);
+  bool _matchesGeneralSearch(Breeder b, String query) {
+    if (query.isEmpty) return true;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Search Filters',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.5),
-                  ),
-                  if (tempAnimal != null || breedController.text.isNotEmpty || locationController.text.isNotEmpty)
-                    TextButton(
-                      onPressed: () {
-                        setSheetState(() {
-                          tempAnimal = null;
-                          breedController.clear();
-                          locationController.clear();
-                        });
-                      },
-                      child: const Text('Clear All', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 25),
-              const Text('Animal Category', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildFilterChip('All', tempAnimal == null, isDark, onTap: () => setSheetState(() => tempAnimal = null)),
-                    ...categories.map((cat) => _buildFilterChip(
-                          cat,
-                          tempAnimal == cat,
-                          isDark,
-                          onTap: () => setSheetState(() => tempAnimal = cat),
-                        )),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 25),
-              const Text('Breed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 10),
-              _buildFilterTextField(breedController, 'Search specific breed...', Icons.pets_rounded, isDark),
-              const SizedBox(height: 25),
-              const Text('Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 10),
-              _buildFilterTextField(locationController, 'Search by city or area...', Icons.location_on_rounded, isDark),
-              const SizedBox(height: 35),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _filterAnimal = tempAnimal;
-                      _filterBreed = breedController.text.trim().isEmpty ? null : breedController.text.trim();
-                      _filterLocation = locationController.text.trim().isEmpty ? null : locationController.text.trim();
-                    });
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: themeGreen,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: const Text('Apply Filters', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final trimmed = query.trim().toLowerCase();
+    if (trimmed.isEmpty) return true;
+
+    final tokens = trimmed.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (tokens.isEmpty) return true;
+
+    String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+    final nameLower = b.name.toLowerCase();
+    final addressLower = b.address.toLowerCase();
+    final breedLower = b.breed.toLowerCase();
+    final categoryLower = b.category.toLowerCase();
+    final descLower = b.description.toLowerCase();
+    final typeLower = b.type.toLowerCase();
+    final roleLower = b.role.toLowerCase();
+    final genderLower = b.gender.toLowerCase();
+    final ageLower = b.age.toLowerCase();
+    final contactLower = b.contactNumber.toLowerCase();
+
+    final animalNames = b.animals.map((a) => a.name.toLowerCase()).join(' ');
+    final animalBreeds = b.animals.map((a) => a.breed.toLowerCase()).join(' ');
+    final animalDescs = b.animals.map((a) => a.description.toLowerCase()).join(' ');
+
+    final fullText = '$nameLower $categoryLower $breedLower $addressLower $descLower $typeLower $roleLower $genderLower $ageLower $contactLower $animalNames $animalBreeds $animalDescs';
+    final fullTextNormalized = norm(fullText);
+
+    // Fast path: direct full substring match
+    if (fullText.contains(trimmed) || fullTextNormalized.contains(norm(trimmed))) {
+      return true;
+    }
+
+    // Every token must match somewhere in the listing's details, normalized text, or synonyms
+    for (final token in tokens) {
+      final tokenNorm = norm(token);
+
+      bool tokenMatch = fullText.contains(token) ||
+          (tokenNorm.isNotEmpty && fullTextNormalized.contains(tokenNorm));
+
+      if (!tokenMatch) {
+        final synonyms = _searchSynonyms[token];
+        if (synonyms != null) {
+          for (final syn in synonyms) {
+            if (fullText.contains(syn) || fullTextNormalized.contains(norm(syn))) {
+              tokenMatch = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!tokenMatch) return false;
+    }
+
+    return true;
   }
 
-  Widget _buildFilterChip(String label, bool isSelected, bool isDark, {required VoidCallback onTap}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? themeGreen : (isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100]),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? themeGreen : (isDark ? Colors.white.withOpacity(0.06) : Colors.transparent),
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[700]),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  int _calculateSearchScore(Breeder b, String query) {
+    if (query.isEmpty) return 0;
+    int score = 0;
+    final q = query.trim().toLowerCase();
+    String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final qNorm = norm(q);
 
-  Widget _buildFilterTextField(TextEditingController controller, String hint, IconData icon, bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100],
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: TextField(
-        controller: controller,
-        style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 13.5),
-          prefixIcon: Icon(icon, size: 18, color: themeGreen),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 15),
-        ),
-      ),
-    );
+    final nameLower = b.name.toLowerCase();
+    final breedLower = b.breed.toLowerCase();
+    final categoryLower = b.category.toLowerCase();
+    final addressLower = b.address.toLowerCase();
+
+    // Exact matches
+    if (nameLower == q || norm(nameLower) == qNorm) {
+      score += 100;
+    } else if (nameLower.startsWith(q)) {
+      score += 60;
+    } else if (nameLower.contains(q)) {
+      score += 40;
+    }
+
+    if (breedLower == q || norm(breedLower) == qNorm) {
+      score += 80;
+    } else if (breedLower.contains(q)) {
+      score += 45;
+    }
+
+    if (categoryLower == q || norm(categoryLower) == qNorm) {
+      score += 70;
+    } else if (categoryLower.contains(q)) {
+      score += 35;
+    }
+
+    if (addressLower.contains(q)) score += 30;
+
+    for (final animal in b.animals) {
+      final aBreed = animal.breed.toLowerCase();
+      final aName = animal.name.toLowerCase();
+      if (aBreed.contains(q) || norm(aBreed).contains(qNorm)) score += 40;
+      if (aName.contains(q)) score += 20;
+    }
+
+    if (b.type.toLowerCase().contains(q)) score += 15;
+    if (b.description.toLowerCase().contains(q)) score += 10;
+
+    score += (b.averageRating * 2).toInt();
+
+    return score;
   }
 
   Widget _buildEmptyState(bool isDark) {
@@ -1345,20 +1321,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
 
   Widget _buildFilteredEmptyState(bool isDark) {
     final isSearching = _searchQuery.isNotEmpty;
-    final hasFilters = _filterAnimal != null || _filterBreed != null || _filterLocation != null;
 
     String title = isSearching ? 'No results found' : 'No listings found';
     String subtitle = isSearching
-        ? 'No matches for "$_searchQuery".\nTry a different search term.'
-        : 'No listings match the current filters.\nTry adjusting your selection.';
+        ? 'No matches for "$_searchQuery".\nTry a different search term or check spelling.'
+        : (_filterType == 'Trader'
+            ? 'There are currently no animal posts from traders in your area.'
+            : _filterType == 'Breeder'
+                ? 'There are currently no animal posts from breeders in your area.'
+                : 'There are currently no listings available.');
 
-    if (!isSearching && !hasFilters) {
+    if (!isSearching) {
       if (_filterType == 'Trader') {
         title = 'No Available Trader Post';
-        subtitle = 'There are currently no animal posts from traders in your area.';
       } else if (_filterType == 'Breeder') {
         title = 'No Available Breeder Post';
-        subtitle = 'There are currently no animal posts from breeders in your area.';
       }
     }
 
@@ -1374,7 +1351,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isSearching ? Icons.search_off_rounded : Icons.filter_list_off_rounded,
+              isSearching ? Icons.search_off_rounded : Icons.pets_rounded,
               size: 58,
               color: themeGreen.withOpacity(0.35),
             ),
@@ -1402,9 +1379,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
               setState(() {
                 _searchQuery = '';
                 _filterType = 'All';
-                _filterAnimal = null;
-                _filterBreed = null;
-                _filterLocation = null;
               });
             },
             child: Container(
@@ -1416,9 +1390,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin, 
                   BoxShadow(color: themeGreen.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))
                 ],
               ),
-              child: const Text(
-                'Clear all filters',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+              child: Text(
+                isSearching ? 'Clear search' : 'Show all listings',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
               ),
             ),
           ),

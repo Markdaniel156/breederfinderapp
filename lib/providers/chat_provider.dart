@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/notification_service.dart';
@@ -80,7 +81,26 @@ class ChatProvider with ChangeNotifier {
             if (senderId != _activeChatId) {
               final userDetails = await _chatService.getUserDetails(senderId);
               final senderName = userDetails?['full_name'] ?? 'Someone';
-              final messageText = record['message_text'] ?? 'Sent you a message';
+              
+              String messageText = record['message_text']?.toString() ?? '';
+              if (messageText.startsWith('{"reply":')) {
+                try {
+                  final decoded = jsonDecode(messageText);
+                  if (decoded is Map && decoded.containsKey('text')) {
+                    messageText = decoded['text']?.toString() ?? '';
+                  }
+                } catch (_) {}
+              }
+
+              if (messageText.trim().isEmpty) {
+                if (record['image_url'] != null) {
+                  final url = record['image_url'].toString().toLowerCase();
+                  final isVid = url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm') || url.contains('.mp4?');
+                  messageText = isVid ? 'Sent you a video' : 'Sent you a photo';
+                } else {
+                  messageText = 'Sent you a message';
+                }
+              }
 
               NotificationService.showMessageNotification(
                 id: record['id'].hashCode,

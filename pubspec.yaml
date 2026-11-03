@@ -2,7 +2,7 @@ name: breederfinderapp
 description: "Breeder Finder and Trading Management App with Geofencing"
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.11.1
@@ -27,6 +27,7 @@ dependencies:
   url_launcher: ^6.2.0
   webview_flutter: ^4.4.2
   app_links: ^6.0.1
+  video_player: ^2.11.1
 
 dev_dependencies:
   flutter_test:
